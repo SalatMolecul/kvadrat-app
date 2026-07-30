@@ -42,7 +42,7 @@ export default function App() {
     owner_telegram_id: ''
   });
 
-  useEffect(() => {
+useEffect(() => {
     fetchEvents();
 
     try {
@@ -55,9 +55,13 @@ export default function App() {
         if (tgUser) {
           setUser(tgUser);
           
-          if (OWNER_IDS.includes(tgUser.id)) {
+          // Безопасное сравнение ID без привязки к типу (число/строка)
+          const isOwner = OWNER_IDS.some(id => String(id) === String(tgUser.id));
+          const isMod = MODERATOR_IDS.some(id => String(id) === String(tgUser.id));
+
+          if (isOwner) {
             setUserRole('owner');
-          } else if (MODERATOR_IDS.includes(tgUser.id)) {
+          } else if (isMod) {
             setUserRole('moderator');
           }
         }
