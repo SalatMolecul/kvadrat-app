@@ -4,7 +4,7 @@ import './index.css';
 
 // 👑 СПИСОК ДОСТУПОВ (Укажите Telegram ID)
 const OWNER_IDS = [5317101537]; // Вы (Главный админ)
-const MODERATOR_IDS = [];       // ID модераторов/админов: [123456, 789012]
+const MODERATOR_IDS = [];       // ID модераторов/админов: [5317101537, 789012]
 
 // Подключение к Supabase
 const SUPABASE_URL = 'https://rxvmeivqdunhpsqsfcvk.supabase.co';
