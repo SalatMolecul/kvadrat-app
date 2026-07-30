@@ -1,45 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import './index.css';
 
-// 💡 Замените 123456789 на ваш ID из @userinfobot (только цифры)
-const ADMIN_TELEGRAM_IDS = [123456789];
+// Ваш Telegram ID для прав администратора
+const ADMIN_TELEGRAM_IDS = [5317101537];
 
-const INITIAL_EVENTS = [
-  {
-    id: 1,
-    title: "Закрытый джазовый вечер",
-    category: "Концерты",
-    location: "Lounge Bar №4",
-    price: "3 500 ₽",
-    age: "18+",
-    image: "https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&w=800&q=80"
-  },
-  {
-    id: 2,
-    title: "Подземная выставка иммерсивного искусства",
-    category: "Выставки",
-    location: "Галерея КВАДРАТ",
-    price: "1 200 ₽",
-    age: "16+",
-    image: "https://images.unsplash.com/photo-1508997449629-303059a039c0?auto=format&fit=crop&w=800&q=80"
-  }
-];
+// Подключение к Supabase (ВСТАВЬТЕ СВОИ КЛЮЧИ ИЗ SUPABASE)
+const SUPABASE_URL = 'https://rxvmeivqdunhpsqsfcvk.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_pEi3BhUAmLqphqSo_d4zBg_d7UQBXIj';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const CATEGORIES = [
-  { id: 'all', title: 'Все места' },
-  { id: 'lounge', title: 'Lounge & Кальяны' },
-  { id: 'events', title: 'Мероприятия' },
-  { id: 'bars', title: 'Бары & Рестораны' },
-  { id: 'roofs', title: 'Крыши & Террасы' }
+  'Все',
+  'Концерты',
+  'Выставки',
+  'Lounge & Кальяны',
+  'Бары & Рестораны',
+  'Крыши & Террасы'
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('events');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [events, setEvents] = useState(INITIAL_EVENTS);
+  const [activeTab, setActiveTab] = useState('events'); // events | profile
+  const [selectedCategory, setSelectedCategory] = useState('Все');
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState('user');
 
+  // Модалка добавления
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -51,8 +39,10 @@ export default function App() {
   });
 
   useEffect(() => {
+    fetchEvents();
+
     try {
-      if (window.Telegram && window.Telegram.WebApp) {
+      if (window.Telegram?.WebApp) {
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
@@ -70,26 +60,52 @@ export default function App() {
     }
   }, []);
 
-  const handleCreateEvent = (e) => {
+  const fetchEvents = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (!error && data) {
+      setEvents(data);
+    }
+    setLoading(false);
+  };
+
+  const handleCreateEvent = async (e) => {
     e.preventDefault();
     if (!newEvent.title || !newEvent.location) return;
 
-    const created = {
+    const eventToInsert = {
       ...newEvent,
-      id: Date.now(),
       image: newEvent.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80'
     };
 
-    setEvents([created, ...events]);
-    setNewEvent({ title: '', category: 'Концерты', location: '', price: '', age: '18+', image: '' });
-    setIsModalOpen(false);
+    const { data, error } = await supabase.from('events').insert([eventToInsert]).select();
+
+    if (!error && data) {
+      setEvents([data[0], ...events]);
+      setNewEvent({ title: '', category: 'Концерты', location: '', price: '', age: '18+', image: '' });
+      setIsModalOpen(false);
+    } else {
+      alert('Ошибка при сохранении в базу данных');
+    }
   };
 
-  const handleDeleteEvent = (id) => {
-    setEvents(events.filter(item => item.id !== id));
+  const handleDeleteEvent = async (id) => {
+    const { error } = await supabase.from('events').delete().eq('id', id);
+    if (!error) {
+      setEvents(events.filter((item) => item.id !== id));
+    }
   };
 
   const isAdminOrOwner = role === 'admin' || role === 'owner';
+
+  // Фильтрация списка по выбранной категории
+  const filteredEvents = selectedCategory === 'Все' 
+    ? events 
+    : events.filter(item => item.category === selectedCategory);
 
   return (
     <div style={{ padding: '16px', paddingBottom: '90px', maxWidth: '480px', margin: '0 auto', width: '100%', minHeight: '100vh', background: '#f8fafc' }}>
@@ -101,15 +117,7 @@ export default function App() {
           <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Живая Москва</p>
         </div>
         {isAdminOrOwner && (
-          <span style={{ 
-            background: '#000', 
-            color: '#fff', 
-            padding: '4px 10px', 
-            borderRadius: '12px', 
-            fontSize: '11px', 
-            fontWeight: '700',
-            textTransform: 'uppercase'
-          }}>
+          <span style={{ background: '#000', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
             Администратор
           </span>
         )}
@@ -118,79 +126,72 @@ export default function App() {
       {/* Вкладка: АФИША */}
       {activeTab === 'events' && (
         <div>
+          {/* Горизонтальные фильтры-чипсы */}
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '12px', scrollbarWidth: 'none' }}>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '20px',
+                  border: 'none',
+                  background: selectedCategory === cat ? '#000' : '#fff',
+                  color: selectedCategory === cat ? '#fff' : '#64748b',
+                  fontWeight: '700',
+                  fontSize: '12px',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  boxShadow: selectedCategory === cat ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+                  border: selectedCategory === cat ? 'none' : '1px solid #e2e8f0'
+                }}>
+                {cat}
+              </button>
+            ))}
+          </div>
+
           {isAdminOrOwner && (
             <button 
               onClick={() => setIsModalOpen(true)}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: '#000',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '14px',
-                fontWeight: '700',
-                marginBottom: '16px',
-                cursor: 'pointer'
-              }}>
+              style={{ width: '100%', padding: '14px', background: '#000', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '700', marginBottom: '16px', cursor: 'pointer' }}>
               + Добавить событие / место
             </button>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {events.map((item) => (
-              <div key={item.id} style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                <img src={item.image} alt={item.title} style={{ width: '100%', height: '180px', objectFit: 'cover' }} />
-                <div style={{ padding: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '11px', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontWeight: '600', color: '#475569' }}>{item.category}</span>
-                    <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '3px 6px', borderRadius: '6px', fontWeight: '700' }}>{item.age}</span>
-                  </div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px', color: '#0f172a', margin: '4px 0' }}>{item.title}</h3>
-                  <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px', margin: '0 0 12px 0' }}>📍 {item.location}</p>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{item.price}</span>
-                    {isAdminOrOwner && (
-                      <button 
-                        onClick={() => handleDeleteEvent(item.id)}
-                        style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                        Удалить
-                      </button>
-                    )}
+          {loading ? (
+            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '20px' }}>Загрузка...</p>
+          ) : filteredEvents.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#64748b', marginTop: '30px', fontSize: '14px' }}>
+              В категории «{selectedCategory}» пока ничего нет
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {filteredEvents.map((item) => (
+                <div key={item.id} style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                  <img src={item.image} alt={item.title} style={{ width: '100%', height: '180px', objectFit: 'cover' }} />
+                  <div style={{ padding: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '11px', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontWeight: '600', color: '#475569' }}>{item.category}</span>
+                      <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '3px 6px', borderRadius: '6px', fontWeight: '700' }}>{item.age}</span>
+                    </div>
+                    <h3 style={{ fontSize: '16px', fontWeight: '700', margin: '4px 0', color: '#0f172a' }}>{item.title}</h3>
+                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 12px 0' }}>📍 {item.location}</p>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{item.price}</span>
+                      {isAdminOrOwner && (
+                        <button 
+                          onClick={() => handleDeleteEvent(item.id)}
+                          style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+                          Удалить
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Вкладка: КАТЕГОРИИ */}
-      {activeTab === 'categories' && (
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '12px', color: '#0f172a' }}>Категории заведений</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {CATEGORIES.map((cat) => (
-              <div 
-                key={cat.id} 
-                onClick={() => setSelectedCategory(cat.id)}
-                style={{ 
-                  background: selectedCategory === cat.id ? '#000' : '#fff', 
-                  color: selectedCategory === cat.id ? '#fff' : '#0f172a',
-                  padding: '16px', 
-                  borderRadius: '14px', 
-                  fontWeight: '700',
-                  border: '1px solid #e2e8f0',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justify: 'space-between',
-                  alignItems: 'center'
-                }}>
-                <span>{cat.title}</span>
-                <span>→</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -212,7 +213,7 @@ export default function App() {
           </div>
 
           <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '12px', fontSize: '13px' }}>
-            <p style={{ marginBottom: '4px', margin: 0 }}><strong>Статус доступа:</strong> {isAdminOrOwner ? '👑 Организатор / Админ' : '👤 Гость'}</p>
+            <p style={{ margin: 0 }}><strong>Статус доступа:</strong> {isAdminOrOwner ? '👑 Организатор / Админ' : '👤 Гость'}</p>
             <p style={{ color: '#64748b', fontSize: '11px', margin: '4px 0 0 0' }}>
               {isAdminOrOwner 
                 ? 'Вам доступны функции создания и удаления локаций.' 
@@ -222,47 +223,29 @@ export default function App() {
         </div>
       )}
 
-      {/* Нижнее меню */}
-      <nav style={{
-        position: 'fixed',
-        bottom: 0, left: 0, right: 0,
-        background: '#fff',
-        borderTop: '1px solid #e2e8f0',
-        padding: '12px 16px',
-        display: 'flex',
-        justify: 'space-around',
-        zIndex: 100
-      }}>
-        <button 
-          onClick={() => setActiveTab('events')}
-          style={{ background: 'none', border: 'none', color: activeTab === 'events' ? '#000' : '#94a3b8', fontWeight: activeTab === 'events' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
-          Афиша
+      {/* Нижнее меню (всего 2 понятные вкладки) */}
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #e2e8f0', padding: '12px 16px', display: 'flex', justifyContent: 'space-around', zIndex: 100 }}>
+        <button onClick={() => setActiveTab('events')} style={{ background: 'none', border: 'none', color: activeTab === 'events' ? '#000' : '#94a3b8', fontWeight: activeTab === 'events' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
+          🔥 Главная / Афиша
         </button>
-        <button 
-          onClick={() => setActiveTab('categories')}
-          style={{ background: 'none', border: 'none', color: activeTab === 'categories' ? '#000' : '#94a3b8', fontWeight: activeTab === 'categories' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
-          Категории
-        </button>
-        <button 
-          onClick={() => setActiveTab('profile')}
-          style={{ background: 'none', border: 'none', color: activeTab === 'profile' ? '#000' : '#94a3b8', fontWeight: activeTab === 'profile' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
-          Профиль
+        <button onClick={() => setActiveTab('profile')} style={{ background: 'none', border: 'none', color: activeTab === 'profile' ? '#000' : '#94a3b8', fontWeight: activeTab === 'profile' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
+          👤 Профиль
         </button>
       </nav>
 
-      {/* Модалка */}
+      {/* Модалка добавления */}
       {isModalOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px'
-        }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '20px', width: '100%', maxWidth: '400px' }}>
             <h2 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>Новое мероприятие</h2>
             <form onSubmit={handleCreateEvent} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <input type="text" placeholder="Название" required value={newEvent.title} onChange={(e) => setNewEvent({...newEvent, title: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
               <input type="text" placeholder="Локация" required value={newEvent.location} onChange={(e) => setNewEvent({...newEvent, location: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+              
               <div style={{ display: 'flex', gap: '8px' }}>
-                <input type="text" placeholder="Цена" value={newEvent.price} onChange={(e) => setNewEvent({...newEvent, price: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                <select value={newEvent.category} onChange={(e) => setNewEvent({...newEvent, category: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                  {CATEGORIES.filter(c => c !== 'Все').map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
                 <select value={newEvent.age} onChange={(e) => setNewEvent({...newEvent, age: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                   <option value="0+">0+</option>
                   <option value="12+">12+</option>
@@ -270,7 +253,10 @@ export default function App() {
                   <option value="18+">18+</option>
                 </select>
               </div>
+
+              <input type="text" placeholder="Цена (напр. 1 500 ₽)" value={newEvent.price} onChange={(e) => setNewEvent({...newEvent, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
               <input type="url" placeholder="Ссылка на картинку" value={newEvent.image} onChange={(e) => setNewEvent({...newEvent, image: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+              
               <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                 <button type="button" onClick={() => setIsModalOpen(false)} style={{ flex: 1, padding: '10px', border: 'none', background: '#f1f5f9', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}>Отмена</button>
                 <button type="submit" style={{ flex: 1, padding: '10px', border: 'none', background: '#000', color: '#fff', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}>Сохранить</button>
