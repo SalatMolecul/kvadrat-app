@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './index.css';
 
-// 🛑 Укажите здесь ваш Telegram ID (число без кавычек или в кавычках)
-// Узнать свой ID можно в Telegram у бота @userinfobot
-const ADMIN_TELEGRAM_IDS = [Salat_Molecul]; 
+// 💡 Замените 123456789 на ваш ID из @userinfobot (только цифры)
+const ADMIN_TELEGRAM_IDS = [123456789];
 
 const INITIAL_EVENTS = [
   {
@@ -35,13 +34,12 @@ const CATEGORIES = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('events'); // events | categories | profile
+  const [activeTab, setActiveTab] = useState('events');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [events, setEvents] = useState(INITIAL_EVENTS);
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState('user'); // По умолчанию простой пользователь
+  const [role, setRole] = useState('user');
 
-  // Модальное окно создания
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -52,25 +50,26 @@ export default function App() {
     image: ''
   });
 
-  // Определение пользователя из Telegram WebApp SDK
   useEffect(() => {
-    if (window.Telegram?.WebApp) {
-      const tg = window.Telegram.WebApp;
-      tg.ready();
-      tg.expand();
+    try {
+      if (window.Telegram && window.Telegram.WebApp) {
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
 
-      const tgUser = tg.initDataUnsafe?.user;
-      if (tgUser) {
-        setUser(tgUser);
-        // Если ID пользователя есть в списке админов — выдаем роль owner/admin
-        if (ADMIN_TELEGRAM_IDS.includes(tgUser.id)) {
-          setRole('owner');
+        const tgUser = tg.initDataUnsafe?.user;
+        if (tgUser) {
+          setUser(tgUser);
+          if (ADMIN_TELEGRAM_IDS.includes(tgUser.id)) {
+            setRole('owner');
+          }
         }
       }
+    } catch (e) {
+      console.log('TG SDK error:', e);
     }
   }, []);
 
-  // Добавление карточки
   const handleCreateEvent = (e) => {
     e.preventDefault();
     if (!newEvent.title || !newEvent.location) return;
@@ -86,7 +85,6 @@ export default function App() {
     setIsModalOpen(false);
   };
 
-  // Удаление карточки
   const handleDeleteEvent = (id) => {
     setEvents(events.filter(item => item.id !== id));
   };
@@ -99,8 +97,8 @@ export default function App() {
       {/* Шапка */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '900', letterSpacing: '-0.5px', color: '#0f172a' }}>КВАДРАТ</h1>
-          <p style={{ fontSize: '12px', color: '#64748b' }}>Живая Москва</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '900', letterSpacing: '-0.5px', color: '#0f172a', margin: 0 }}>КВАДРАТ</h1>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Живая Москва</p>
         </div>
         {isAdminOrOwner && (
           <span style={{ 
@@ -132,8 +130,7 @@ export default function App() {
                 borderRadius: '14px',
                 fontWeight: '700',
                 marginBottom: '16px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                cursor: 'pointer'
               }}>
               + Добавить событие / место
             </button>
@@ -141,15 +138,15 @@ export default function App() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {events.map((item) => (
-              <div key={item.id} style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+              <div key={item.id} style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
                 <img src={item.image} alt={item.title} style={{ width: '100%', height: '180px', objectFit: 'cover' }} />
                 <div style={{ padding: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <span style={{ fontSize: '11px', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontWeight: '600', color: '#475569' }}>{item.category}</span>
                     <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '3px 6px', borderRadius: '6px', fontWeight: '700' }}>{item.age}</span>
                   </div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px', color: '#0f172a' }}>{item.title}</h3>
-                  <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>📍 {item.location}</p>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px', color: '#0f172a', margin: '4px 0' }}>{item.title}</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px', margin: '0 0 12px 0' }}>📍 {item.location}</p>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{item.price}</span>
@@ -202,21 +199,21 @@ export default function App() {
         <div style={{ background: '#fff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#000', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '18px' }}>
-              {user ? user.first_name[0] : 'U'}
+              {user?.first_name ? user.first_name[0] : 'U'}
             </div>
             <div>
-              <h3 style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>
+              <h3 style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a', margin: 0 }}>
                 {user ? `${user.first_name} ${user.last_name || ''}` : 'Гость Telegram'}
               </h3>
-              <p style={{ fontSize: '12px', color: '#64748b' }}>
-                {user?.username ? `@${user.username}` : 'ID не определен'}
+              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                {user?.username ? `@${user.username}` : `ID: ${user?.id || 'не определен'}`}
               </p>
             </div>
           </div>
 
           <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '12px', fontSize: '13px' }}>
-            <p style={{ marginBottom: '4px' }}><strong>Статус доступа:</strong> {isAdminOrOwner ? '👑 Организатор / Админ' : '👤 Гость'}</p>
-            <p style={{ color: '#64748b', fontSize: '11px' }}>
+            <p style={{ marginBottom: '4px', margin: 0 }}><strong>Статус доступа:</strong> {isAdminOrOwner ? '👑 Организатор / Админ' : '👤 Гость'}</p>
+            <p style={{ color: '#64748b', fontSize: '11px', margin: '4px 0 0 0' }}>
               {isAdminOrOwner 
                 ? 'Вам доступны функции создания и удаления локаций.' 
                 : 'Для получения прав администратора обратитесь к владельцу.'}
@@ -225,35 +222,35 @@ export default function App() {
         </div>
       )}
 
-      {/* Нижнее меню навигации */}
+      {/* Нижнее меню */}
       <nav style={{
         position: 'fixed',
         bottom: 0, left: 0, right: 0,
         background: '#fff',
         borderTop: '1px solid #e2e8f0',
-        padding: '8px 16px',
+        padding: '12px 16px',
         display: 'flex',
         justify: 'space-around',
         zIndex: 100
       }}>
         <button 
           onClick={() => setActiveTab('events')}
-          style={{ background: 'none', border: 'none', color: activeTab === 'events' ? '#000' : '#94a3b8', fontWeight: activeTab === 'events' ? '800' : '600', fontSize: '12px', cursor: 'pointer' }}>
+          style={{ background: 'none', border: 'none', color: activeTab === 'events' ? '#000' : '#94a3b8', fontWeight: activeTab === 'events' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
           Афиша
         </button>
         <button 
           onClick={() => setActiveTab('categories')}
-          style={{ background: 'none', border: 'none', color: activeTab === 'categories' ? '#000' : '#94a3b8', fontWeight: activeTab === 'categories' ? '800' : '600', fontSize: '12px', cursor: 'pointer' }}>
+          style={{ background: 'none', border: 'none', color: activeTab === 'categories' ? '#000' : '#94a3b8', fontWeight: activeTab === 'categories' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
           Категории
         </button>
         <button 
           onClick={() => setActiveTab('profile')}
-          style={{ background: 'none', border: 'none', color: activeTab === 'profile' ? '#000' : '#94a3b8', fontWeight: activeTab === 'profile' ? '800' : '600', fontSize: '12px', cursor: 'pointer' }}>
+          style={{ background: 'none', border: 'none', color: activeTab === 'profile' ? '#000' : '#94a3b8', fontWeight: activeTab === 'profile' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
           Профиль
         </button>
       </nav>
 
-      {/* Модальное окно создания */}
+      {/* Модалка */}
       {isModalOpen && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
