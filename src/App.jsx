@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import './index.css';
 
-// 👑 СПИСОК ДОСТУПОВ (Укажите Telegram ID)
-const OWNER_IDS = [5317101537]; // Вы (Главный админ)
-const MODERATOR_IDS = [];       // ID модераторов/админов: [5317101537, 5403062208]
+// 👑 СПИСОК ДОСТУПОВ
+const OWNER_IDS = [5317101537];
+const MODERATOR_IDS = [5403062208];
 
-// Подключение к Supabase
 const SUPABASE_URL = 'https://rxvmeivqdunhpsqsfcvk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_pEi3BhUAmLqphqSo_d4zBg_d7UQBXIj'; // Проверьте, что тут ваш реальный ключ из Supabase!
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -24,9 +23,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('events');
   const [selectedCategory, setSelectedCategory] = useState('Все');
   const [events, setEvents] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [myBookings, setMyBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState('user'); // owner | moderator | venue_owner | user
+  const [userRole, setUserRole] = useState('user');
 
   // Модалка просмотра деталей
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -44,12 +45,13 @@ export default function App() {
     description: '',
     booking_url: '',
     phone: '',
+    total_seats: 50,
     is_featured: false,
     owner_telegram_id: ''
   });
 
   useEffect(() => {
-    fetchEvents();
+    let currentUser = null;
 
     try {
       if (window.Telegram?.WebApp) {
@@ -59,6 +61,7 @@ export default function App() {
 
         const tgUser = tg.initDataUnsafe?.user;
         if (tgUser) {
+          currentUser = tgUser;
           setUser(tgUser);
           
           const isOwner = OWNER_IDS.some(id => String(id) === String(tgUser.id));
@@ -67,28 +70,96 @@ export default function App() {
           if (isOwner) setUserRole('owner');
           else if (isMod) setUserRole('moderator');
         } else {
+          currentUser = { id: 5317101537, first_name: 'Павел' };
+          setUser(currentUser);
           setUserRole('owner'); 
         }
       } else {
+        currentUser = { id: 5317101537, first_name: 'Павел' };
+        setUser(currentUser);
         setUserRole('owner');
       }
     } catch (e) {
-      console.log('TG SDK error:', e);
+      currentUser = { id: 5317101537, first_name: 'Павел' };
+      setUser(currentUser);
       setUserRole('owner');
     }
+
+    fetchInitialData(currentUser?.id);
   }, []);
 
-  const fetchEvents = async () => {
+  const fetchInitialData = async (currentUserId) => {
     setLoading(true);
-    const { data, error } = await supabase
+    
+    // Загружаем мероприятия
+    const { data: eventsData } = await supabase
       .from('events')
       .select('*')
       .order('id', { ascending: false });
 
-    if (!error && data) {
-      setEvents(data);
+    // Загружаем все брони
+    const { data: bookingsData } = await supabase
+      .from('bookings')
+      .select('*');
+
+    if (eventsData) setEvents(eventsData);
+    if (bookingsData) {
+      setBookings(bookingsData);
+      if (currentUserId) {
+        setMyBookings(bookingsData.filter(b => String(b.user_id) === String(currentUserId)));
+      }
     }
+
     setLoading(false);
+  };
+
+  const getBookedCount = (eventId) => {
+    return bookings.filter(b => b.event_id === eventId).length;
+  };
+
+  const isUserBooked = (eventId) => {
+    if (!user) return false;
+    return bookings.some(b => b.event_id === eventId && String(b.user_id) === String(user.id));
+  };
+
+  const handleBookEvent = async (event) => {
+    if (!user) {
+      alert('Ошибка: Не удалось определить профиль Telegram');
+      return;
+    }
+
+    if (isUserBooked(event.id)) {
+      alert('Вы уже забронировали место на это мероприятие!');
+      return;
+    }
+
+    const bookedCount = getBookedCount(event.id);
+    if (event.total_seats > 0 && bookedCount >= event.total_seats) {
+      alert('К сожалению, все места уже забронированы!');
+      return;
+    }
+
+    // Генерация уникального кода формата #KV-XXXXX
+    const code = '#KV-' + Math.random().toString(36).substring(2, 7).toUpperCase();
+
+    const newBooking = {
+      event_id: event.id,
+      user_id: user.id,
+      user_name: user.first_name || 'Пользователь',
+      booking_code: code
+    };
+
+    const { data, error } = await supabase.from('bookings').insert([newBooking]).select();
+
+    if (error) {
+      alert('Ошибка при бронировании: ' + error.message);
+    } else if (data && data.length > 0) {
+      const created = data[0];
+      setBookings([...bookings, created]);
+      setMyBookings([...myBookings, created]);
+      alert(`Успешно забронировано!\nВаш код брони: ${code}\nПокажите его в разделе "Профиль" на входе.`);
+      setSelectedEvent(null);
+    }
   };
 
   const canEditEvent = (item) => {
@@ -111,6 +182,7 @@ export default function App() {
       description: '',
       booking_url: '',
       phone: '',
+      total_seats: 50,
       is_featured: false,
       owner_telegram_id: ''
     });
@@ -130,6 +202,7 @@ export default function App() {
       description: item.description || '',
       booking_url: item.booking_url || '',
       phone: item.phone || '',
+      total_seats: item.total_seats || 50,
       is_featured: item.is_featured || false,
       owner_telegram_id: item.owner_telegram_id || ''
     });
@@ -153,6 +226,7 @@ export default function App() {
       description: formData.description,
       booking_url: formData.booking_url,
       phone: formData.phone,
+      total_seats: Number(formData.total_seats) || 0,
       is_featured: Boolean(formData.is_featured),
       owner_telegram_id: formData.owner_telegram_id ? Number(formData.owner_telegram_id) : null
     };
@@ -241,7 +315,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* Кнопка добавления для админов/модераторов */}
           {canCreateNew && (
             <button 
               onClick={handleOpenCreateModal}
@@ -250,10 +323,10 @@ export default function App() {
             </button>
           )}
 
-          {/* БЛОК: События недели (Показывается только во вкладке "Все") */}
+          {/* БЛОК: Анонсы недели */}
           {selectedCategory === 'Все' && featuredEvents.length > 0 && (
             <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '12px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '12px', color: '#0f172a' }}>
                 🔥 События & Анонсы недели
               </h2>
               <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
@@ -287,6 +360,9 @@ export default function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {filteredEvents.map((item) => {
                 const isEditable = canEditEvent(item);
+                const bookedCount = getBookedCount(item.id);
+                const isFull = item.total_seats > 0 && bookedCount >= item.total_seats;
+
                 return (
                   <div 
                     key={item.id} 
@@ -299,7 +375,14 @@ export default function App() {
                         <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '3px 6px', borderRadius: '6px', fontWeight: '700' }}>{item.age}</span>
                       </div>
                       <h3 style={{ fontSize: '16px', fontWeight: '700', margin: '4px 0', color: '#0f172a' }}>{item.title}</h3>
-                      <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 12px 0' }}>📍 {item.location}</p>
+                      <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 10px 0' }}>📍 {item.location}</p>
+
+                      {/* Информация о местах */}
+                      {item.total_seats > 0 && (
+                        <div style={{ fontSize: '12px', color: isFull ? '#dc2626' : '#16a34a', fontWeight: '700', marginBottom: '10px' }}>
+                          {isFull ? '🚫 Мест нет' : `🎟️ Осталось мест: ${item.total_seats - bookedCount} из ${item.total_seats}`}
+                        </div>
+                      )}
                       
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{item.price}</span>
@@ -330,26 +413,65 @@ export default function App() {
         </div>
       )}
 
-      {/* Вкладка: ПРОФИЛЬ */}
+      {/* Вкладка: ПРОФИЛЬ & МОИ БРОНИ */}
       {activeTab === 'profile' && (
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#000', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '18px' }}>
-              {user?.first_name ? user.first_name[0] : 'U'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#000', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '18px' }}>
+                {user?.first_name ? user.first_name[0] : 'U'}
+              </div>
+              <div>
+                <h3 style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a', margin: 0 }}>
+                  {user ? `${user.first_name} ${user.last_name || ''}` : 'Посетитель'}
+                </h3>
+                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                  {user?.id ? `ID: ${user.id}` : 'Telegram WebApp'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a', margin: 0 }}>
-                {user ? `${user.first_name} ${user.last_name || ''}` : 'Посетитель'}
-              </h3>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
-                {user?.id ? `ID: ${user.id}` : 'Telegram WebApp'}
-              </p>
+
+            <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: '12px', fontSize: '13px' }}>
+              <p style={{ margin: 0 }}><strong>Роль:</strong> {userRole === 'owner' ? '👑 Владелец платформы' : userRole === 'moderator' ? '🛡️ Модератор' : '👤 Посетитель'}</p>
             </div>
           </div>
 
-          <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '12px', fontSize: '13px' }}>
-            <p style={{ margin: 0 }}><strong>Роль:</strong> {userRole === 'owner' ? '👑 Владелец платформы' : userRole === 'moderator' ? '🛡️ Модератор' : '👤 Посетитель'}</p>
+          {/* БЛОК МОИ БРОНИ */}
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🎟️ Мои забронированные билеты ({myBookings.length})
+            </h3>
+
+            {myBookings.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#64748b', textAlign: 'center', margin: '20px 0' }}>
+                У вас пока нет активных бронирований
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {myBookings.map((b) => {
+                  const ev = events.find(e => e.id === b.event_id);
+                  return (
+                    <div key={b.id} style={{ border: '2px dashed #e2e8f0', padding: '14px', borderRadius: '14px', background: '#fafafa' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>{ev ? ev.title : 'Мероприятие'}</h4>
+                          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>📍 {ev ? ev.location : ''}</p>
+                        </div>
+                        <span style={{ background: '#000', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: '800', fontFamily: 'monospace' }}>
+                          {b.booking_code}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '11px', color: '#16a34a', fontWeight: '700' }}>
+                        ✓ Бронь подтверждена • Покажите код фейсконтролю
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
         </div>
       )}
 
@@ -359,77 +481,100 @@ export default function App() {
           🔥 Главная / Афиша
         </button>
         <button onClick={() => setActiveTab('profile')} style={{ background: 'none', border: 'none', color: activeTab === 'profile' ? '#000' : '#94a3b8', fontWeight: activeTab === 'profile' ? '800' : '600', fontSize: '13px', cursor: 'pointer' }}>
-          👤 Профиль
+          👤 Профиль / Билеты
         </button>
       </nav>
 
-      {/* 🔍 МОДАЛКА ДЕТАЛЬНОЙ СТРАНИЦЫ */}
-      {selectedEvent && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 }}>
-          <div style={{ background: '#fff', width: '100%', maxHeight: '92vh', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', overflowY: 'auto', paddingBottom: '30px', animation: 'slideUp 0.3s ease-out' }}>
-            
-            <div style={{ position: 'relative' }}>
-              <img src={selectedEvent.image} alt={selectedEvent.title} style={{ width: '100%', height: '240px', objectFit: 'cover' }} />
-              <button 
-                onClick={() => setSelectedEvent(null)}
-                style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ✕
-              </button>
-            </div>
+      {/* 🔍 МОДАЛКА ДЕТАЛЬНОЙ СТРАНИЦЫ С БРОНИРОВАНИЕМ */}
+      {selectedEvent && (() => {
+        const bookedCount = getBookedCount(selectedEvent.id);
+        const userHasBooked = isUserBooked(selectedEvent.id);
+        const isFull = selectedEvent.total_seats > 0 && bookedCount >= selectedEvent.total_seats;
 
-            <div style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', background: '#f1f5f9', color: '#475569', padding: '4px 10px', borderRadius: '8px', fontWeight: '700' }}>
-                  {selectedEvent.category}
-                </span>
-                <span style={{ fontSize: '12px', background: '#fef3c7', color: '#b45309', padding: '4px 8px', borderRadius: '8px', fontWeight: '700' }}>
-                  {selectedEvent.age}
-                </span>
-              </div>
-
-              <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>{selectedEvent.title}</h2>
-              <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 16px 0', fontWeight: '500' }}>📍 {selectedEvent.location}</p>
-
-              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '12px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>Стоимость:</span>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{selectedEvent.price}</span>
-              </div>
-
-              {selectedEvent.description && (
-                <div style={{ marginBottom: '20px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>Описание</h4>
-                  <p style={{ fontSize: '14px', color: '#334155', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-line' }}>{selectedEvent.description}</p>
-                </div>
-              )}
-
-              {selectedEvent.phone && (
-                <div style={{ marginBottom: '20px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>Контакты</h4>
-                  <a href={`tel:${selectedEvent.phone}`} style={{ fontSize: '14px', color: '#2563eb', textDecoration: 'none', fontWeight: '600' }}>📞 {selectedEvent.phone}</a>
-                </div>
-              )}
-
-              {/* КНОПКА ДЕЙСТВИЯ (БРОНЬ / БИЛЕТЫ) */}
-              {selectedEvent.booking_url ? (
-                <a 
-                  href={selectedEvent.booking_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  style={{ display: 'block', width: '100%', padding: '16px', background: '#000', color: '#fff', textAlign: 'center', borderRadius: '16px', fontWeight: '800', fontSize: '15px', textDecoration: 'none', boxSizing: 'border-box' }}>
-                  🎟️ Забронировать / Купить билет
-                </a>
-              ) : (
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', zIndex: 1000 }}>
+            <div style={{ background: '#fff', width: '100%', maxHeight: '92vh', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', overflowY: 'auto', paddingBottom: '30px' }}>
+              
+              <div style={{ position: 'relative' }}>
+                <img src={selectedEvent.image} alt={selectedEvent.title} style={{ width: '100%', height: '240px', objectFit: 'cover' }} />
                 <button 
-                  disabled
-                  style={{ width: '100%', padding: '16px', background: '#cbd5e1', color: '#64748b', border: 'none', borderRadius: '16px', fontWeight: '800', fontSize: '15px' }}>
-                  Бронирование недоступно
+                  onClick={() => setSelectedEvent(null)}
+                  style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  ✕
                 </button>
-              )}
+              </div>
 
+              <div style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', background: '#f1f5f9', color: '#475569', padding: '4px 10px', borderRadius: '8px', fontWeight: '700' }}>
+                    {selectedEvent.category}
+                  </span>
+                  <span style={{ fontSize: '12px', background: '#fef3c7', color: '#b45309', padding: '4px 8px', borderRadius: '8px', fontWeight: '700' }}>
+                    {selectedEvent.age}
+                  </span>
+                </div>
+
+                <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>{selectedEvent.title}</h2>
+                <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 16px 0', fontWeight: '500' }}>📍 {selectedEvent.location}</p>
+
+                <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '12px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>Стоимость:</span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{selectedEvent.price}</span>
+                </div>
+
+                {/* Статус свободных мест */}
+                {selectedEvent.total_seats > 0 && (
+                  <div style={{ background: isFull ? '#fef2f2' : '#f0fdf4', border: `1px solid ${isFull ? '#fecaca' : '#bbf7d0'}`, padding: '10px 14px', borderRadius: '12px', marginBottom: '20px', fontSize: '13px', fontWeight: '700', color: isFull ? '#991b1b' : '#166534', textAlign: 'center' }}>
+                    {isFull ? '🚫 Все места уже заняты' : `🎟️ Свободно мест: ${selectedEvent.total_seats - bookedCount} из ${selectedEvent.total_seats}`}
+                  </div>
+                )}
+
+                {selectedEvent.description && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>Описание</h4>
+                    <p style={{ fontSize: '14px', color: '#334155', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-line' }}>{selectedEvent.description}</p>
+                  </div>
+                )}
+
+                {selectedEvent.phone && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>Контакты</h4>
+                    <a href={`tel:${selectedEvent.phone}`} style={{ fontSize: '14px', color: '#2563eb', textDecoration: 'none', fontWeight: '600' }}>📞 {selectedEvent.phone}</a>
+                  </div>
+                )}
+
+                {/* КНОПКА БРОНИРОВАНИЯ */}
+                {userHasBooked ? (
+                  <div style={{ background: '#16a34a', color: '#fff', padding: '16px', borderRadius: '16px', textAlign: 'center', fontWeight: '800', fontSize: '15px' }}>
+                    ✓ Вы уже забронировали билет (см. Профиль)
+                  </div>
+                ) : selectedEvent.booking_url ? (
+                  <a 
+                    href={selectedEvent.booking_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ display: 'block', width: '100%', padding: '16px', background: '#000', color: '#fff', textAlign: 'center', borderRadius: '16px', fontWeight: '800', fontSize: '15px', textDecoration: 'none', boxSizing: 'border-box' }}>
+                    🎟️ Купить билет на сайте
+                  </a>
+                ) : isFull ? (
+                  <button 
+                    disabled
+                    style={{ width: '100%', padding: '16px', background: '#cbd5e1', color: '#64748b', border: 'none', borderRadius: '16px', fontWeight: '800', fontSize: '15px' }}>
+                    Мест больше нет
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => handleBookEvent(selectedEvent)}
+                    style={{ width: '100%', padding: '16px', background: '#000', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}>
+                    🎟️ Забронировать место (Получить код)
+                  </button>
+                )}
+
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Модалка СОЗДАНИЯ / РЕДАКТИРОВАНИЯ */}
       {isModalOpen && (
@@ -455,10 +600,11 @@ export default function App() {
               </div>
 
               <input type="text" placeholder="Цена (напр. 1 500 ₽ или Бесплатно)" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-              <input type="url" placeholder="Ссылка на обложку (изображение)" value={formData.image} onChange={(e) => setFormData({...formData, image: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+              <input type="number" placeholder="Лимит мест (напр. 50, или 0 если безлимит)" value={formData.total_seats} onChange={(e) => setFormData({...formData, total_seats: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
               
-              <textarea placeholder="Полное описание заведения или события" rows="3" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'inherit' }} />
-              <input type="url" placeholder="Ссылка на бронь / покупку билетов (https://...)" value={formData.booking_url} onChange={(e) => setFormData({...formData, booking_url: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+              <input type="url" placeholder="Ссылка на обложку (изображение)" value={formData.image} onChange={(e) => setFormData({...formData, image: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+              <textarea placeholder="Описание заведения или события" rows="3" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'inherit' }} />
+              <input type="url" placeholder="Внешняя ссылка на покупку билетов (необязательно)" value={formData.booking_url} onChange={(e) => setFormData({...formData, booking_url: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
               <input type="tel" placeholder="Телефон / Контакты" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
 
               {(userRole === 'owner' || userRole === 'moderator') && (
