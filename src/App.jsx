@@ -129,33 +129,46 @@ useEffect(() => {
   };
 
   // Сохранение (Создание или Обновление)
-  const handleSubmitForm = async (e) => {
+const handleSubmitForm = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.location) return;
+    if (!formData.title || !formData.location) {
+      alert('Заполните название и локацию');
+      return;
+    }
 
     const payload = {
-      ...formData,
+      title: formData.title,
+      category: formData.category,
+      location: formData.location,
+      price: formData.price || 'Бесплатно',
+      age: formData.age,
       image: formData.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
+      is_featured: Boolean(formData.is_featured),
       owner_telegram_id: formData.owner_telegram_id ? Number(formData.owner_telegram_id) : null
     };
 
-    if (editingEventId) {
-      // Обновление
-      const { error } = await supabase.from('events').update(payload).eq('id', editingEventId);
-      if (!error) {
-        setEvents(events.map(item => item.id === editingEventId ? { ...item, ...payload } : item));
-        setIsModalOpen(false);
+    try {
+      if (editingEventId) {
+        const { error } = await supabase.from('events').update(payload).eq('id', editingEventId);
+        if (error) {
+          alert('Ошибка обновления Supabase: ' + error.message);
+        } else {
+          setEvents(events.map(item => item.id === editingEventId ? { ...item, ...payload } : item));
+          setIsModalOpen(false);
+        }
+      } else {
+        const { data, error } = await supabase.from('events').insert([payload]).select();
+        if (error) {
+          alert('Ошибка добавления Supabase: ' + error.message);
+        } else if (data && data.length > 0) {
+          setEvents([data[0], ...events]);
+          setIsModalOpen(false);
+        }
       }
-    } else {
-      // Создание нового
-      const { data, error } = await supabase.from('events').insert([payload]).select();
-      if (!error && data) {
-        setEvents([data[0], ...events]);
-        setIsModalOpen(false);
-      }
+    } catch (err) {
+      alert('Системная ошибка: ' + err.message);
     }
   };
-
   const handleDeleteEvent = async (id) => {
     if (!window.confirm('Удалить эту карточку?')) return;
     const { error } = await supabase.from('events').delete().eq('id', id);
