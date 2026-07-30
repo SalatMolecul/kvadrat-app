@@ -1,0 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* Скрываем стандартную полосу прокрутки для аккуратного мобильного вида */
+::-webkit-scrollbar {
+  display: none;
+}
