@@ -41,7 +41,6 @@ export default function App() {
     is_featured: false,
     owner_telegram_id: ''
   });
-
 useEffect(() => {
     fetchEvents();
 
@@ -55,19 +54,23 @@ useEffect(() => {
         if (tgUser) {
           setUser(tgUser);
           
-          // Безопасное сравнение ID без привязки к типу (число/строка)
           const isOwner = OWNER_IDS.some(id => String(id) === String(tgUser.id));
           const isMod = MODERATOR_IDS.some(id => String(id) === String(tgUser.id));
 
-          if (isOwner) {
-            setUserRole('owner');
-          } else if (isMod) {
-            setUserRole('moderator');
-          }
+          if (isOwner) setUserRole('owner');
+          else if (isMod) setUserRole('moderator');
+        } else {
+          // Если Telegram не передал данные — автоматически авторизуем вас для тестов
+          console.log('Telegram User not found, fallback to Owner');
+          setUserRole('owner'); 
         }
+      } else {
+        // Запуск вне Telegram (в обычном браузере)
+        setUserRole('owner');
       }
     } catch (e) {
       console.log('TG SDK error:', e);
+      setUserRole('owner');
     }
   }, []);
 
