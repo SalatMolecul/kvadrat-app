@@ -8,7 +8,7 @@ const MODERATOR_IDS = [];       // ID модераторов/админов: [53
 
 // Подключение к Supabase
 const SUPABASE_URL = 'https://rxvmeivqdunhpsqsfcvk.supabase.co';
-const SUPABASE_ANON_KEY = 'ВАШ_PUBLISHABLE_KEY'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_pEi3BhUAmLqphqSo_d4zBg_d7UQBXIj'; 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const CATEGORIES = [
